@@ -58,7 +58,7 @@ class OrganizatonMaker:
         except:
             url, id = None, None
         else:
-            url = tag.get('href')
+            url = tag.get('href').strip() 
             id = tag.text.strip().split()[-1]
         return id, url
     
@@ -73,25 +73,25 @@ class OrganizatonMaker:
     @staticmethod
     def __get_inn(record) -> str:
         try:
-            return record.find_all('div', class_='registry-entry__body-value')[1].text().strip()
+            return record.find_all('div', class_='registry-entry__body-value')[1].text.strip()
         except:
             return None
 
     @staticmethod
-    def __get_date(record, num=0) -> datetime:
+    def __get_date(record, num=0) -> str:
         try:
-            return datetime.strptime(record.find('div', class_='mt-auto').find_all('div', class_='data-block__value')[num].text, 
-                                     r'%D.%M.%Y')
+            return record.find('div', class_='mt-auto')\
+                         .find_all('div', class_='data-block__value')[num].text.strip() 
         except:
             return None 
 
     @classmethod
-    def __get_include_date(cls, record) -> datetime:
+    def __get_include_date(cls, record) -> str:
         return cls.__get_date(record)
     
 
     @classmethod
-    def __get_update_date(cls, record) -> datetime:
+    def __get_update_date(cls, record) -> str:
         return cls.__get_date(record, 1)
 
     @classmethod
@@ -143,11 +143,16 @@ class ZakupkiParser(Parser):
         return int(page.find_all('li', class_='page')[-1].text.strip())
     
     @classmethod
-    def pasre_page(cls, page, org_maker) -> [Organization]:
-        records = cls.get_soup_from_html_page(page).find('div', class_='search-registry-entrys-block')\
+    def get_records_from_page(cls, page) -> [str]:
+        return cls.get_soup_from_html_page(page).find('div', class_='search-registry-entrys-block')\
                                              .find_all('div', class_='search-registry-entry-block')
         
-        organizations = [org_maker.get_organization_from_record(record) for record in records[:10]]
+
+    @classmethod
+    def pasre_page(cls, page, org_maker) -> [Organization]:
+        records = cls.get_records_from_page(page)
+        organizations = [org_maker.get_organization_from_record(record) 
+                         for record in records]
         return organizations
 
     @classmethod
@@ -158,15 +163,17 @@ class ZakupkiParser(Parser):
         pages = asyncio.run(pages)
 
         print('SCRAPING')
-        orgranizations = reduce(lambda a, b: a + b, [cls.pasre_page(page, org_maker) for page in pages])
+        orgranizations = reduce(lambda a, b: a + b, [cls.pasre_page(page, org_maker) 
+                                                     for page in pages])
         return orgranizations
         
 
 if __name__ == "__main__":
     org_maker = OrganizatonMaker()
-    orgs = ZakupkiParser().parse(org_maker)
-    print(len(orgs))
-    conv = ConverterOrganizationToJSON()
-    data = conv.get_converted_orgs(orgs)
+    parser = ZakupkiParser()
     json_saver = JSONSaver()
+    conv = ConverterOrganizationToJSON()
+
+    orgs = parser.parse(org_maker)
+    data = conv.get_converted_orgs(orgs)
     json_saver.save(data, 'test.json')
