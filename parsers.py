@@ -4,6 +4,7 @@ from dataclasses import dataclass, asdict
 from datetime import datetime
 from pprint import pprint
 from functools import reduce
+from json import dump
 
 from requests import get, post
 from bs4 import BeautifulSoup
@@ -15,6 +16,12 @@ headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36'
     }
 
+class JSONSaver:
+    
+    @staticmethod
+    def save(data, path) -> None:
+        with open(path, 'w', encoding='utf-8') as file:
+            dump(data, file, indent=4, ensure_ascii=False)
 
 class Parser:
 
@@ -24,13 +31,14 @@ class Parser:
 
 @dataclass
 class Organization:
+
     id           : str
     name         : str
     inn          : str
     url          : str
     date_include : datetime
     date_updated : datetime
-
+    
 class ConverterOrganizationToJSON():
     
     @staticmethod
@@ -38,8 +46,9 @@ class ConverterOrganizationToJSON():
         return asdict(organization)
     
     @classmethod
-    def get_converted_orgs(cls, organization) -> iter:
-        return (cls.__get_converted_org(org) for org in organization)
+    def get_converted_orgs(cls, organization) -> [dict]:
+        return [cls.__get_converted_org(org) for org in organization]
+    
 class OrganizatonMaker:
     
     @staticmethod
@@ -93,7 +102,6 @@ class OrganizatonMaker:
         date_include = cls.__get_include_date(record)
         date_update = cls.__get_update_date(record)
         return Organization(id, name, inn, url, date_include, date_update)
-    
 
 class ZakupkiParser(Parser):
     recs_per_page = 500
@@ -159,4 +167,6 @@ if __name__ == "__main__":
     orgs = ZakupkiParser().parse(org_maker)
     print(len(orgs))
     conv = ConverterOrganizationToJSON()
-    pprint(conv.get_converted_orgs(orgs))
+    data = conv.get_converted_orgs(orgs)
+    json_saver = JSONSaver()
+    json_saver.save(data, 'test.json')
