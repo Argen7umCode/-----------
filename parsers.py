@@ -34,7 +34,7 @@ class CSVSaver(Saver):
     
     @staticmethod
     def save(data, path) -> None:
-        with open(path, 'w', newline='') as file:
+        with open(path, 'w', newline='\n') as file:
             csv.writer(file).writerows(data)
 
 @dataclass
@@ -56,10 +56,11 @@ class Maker(ABC):
 class OrganizatonMaker:
     
     @staticmethod
-    def __get_id_and_url(record) -> tuple:
+    def _get_id_and_url(record) -> tuple:
         try:
             tag = record.find('div', class_='registry-entry__header-mid__number').find('a')
-        except Exception:
+        except Exception as e:
+            print(e)
             url, id = None, None
         else:
             url = tag.get('href').strip()
@@ -67,21 +68,21 @@ class OrganizatonMaker:
         return id, url
     
     @staticmethod
-    def __get_name(record) -> str:
+    def _get_name(record) -> str:
         try:
             return record.find('div', class_='registry-entry__body-value').text.strip()
         except Exception:
             return None
         
     @staticmethod
-    def __get_inn(record) -> str:
+    def _get_inn(record) -> str:
         try:
             return record.find_all('div', class_='registry-entry__body-value')[1].text.strip()
         except Exception:
             return None
 
     @staticmethod
-    def __get_date(record, num=0) -> str:
+    def _get_date(record, num=0) -> str:
         try:
             return record.find('div', class_='mt-auto')\
                          .find_all('div', class_='data-block__value')[num].text.strip()
@@ -89,20 +90,20 @@ class OrganizatonMaker:
             return None
 
     @classmethod
-    def __get_include_date(cls, record) -> str:
-        return cls.__get_date(record)
+    def _get_include_date(cls, record) -> str:
+        return cls._get_date(record)
     
     @classmethod
-    def __get_update_date(cls, record) -> str:
-        return cls.__get_date(record, 1)
+    def _get_update_date(cls, record) -> str:
+        return cls._get_date(record, 1)
 
     @classmethod
     def make(cls, record) -> Organization:
-        name = cls.__get_name(record)
-        id, url = cls.__get_id_and_url(record)
-        inn = cls.__get_inn(record)
-        date_include = cls.__get_include_date(record)
-        date_update = cls.__get_update_date(record)
+        name = cls._get_name(record)
+        id, url = cls._get_id_and_url(record)
+        inn = cls._get_inn(record)
+        date_include = cls._get_include_date(record)
+        date_update = cls._get_update_date(record)
         return Organization(id, name, inn, url, date_include, date_update)
             
 
@@ -140,14 +141,14 @@ class ConverterOrganizatonToCVS(Converter):
 
     @classmethod
     def _convert_many(cls, organizations: [Organization], sep : str = ',') -> str:
-        return '/n'.join(cls._convert_one(organization, sep) 
+        return '\n'.join(cls._convert_one(organization, sep) 
                           for organization in organizations)
     @classmethod
     def convert(cls, data: Any, sep : str = ',', *args, **kwargs):
         return cls._convert_one(data, sep) if isinstance(data, Organization)\
             else cls._convert_many(data, sep)
 
-class Parser:
+class Parser(ABC):
 
     @abstractmethod
     def parse(self):
@@ -188,7 +189,7 @@ class ZakupkiParser(Parser):
         return BeautifulSoup(html_page, 'lxml')
 
     @classmethod
-    def __get_count_pages(cls) -> int:
+    def _get_count_pages(cls) -> int:
         page = cls.get_soup_from_html_page(cls.get_page_by_page_num())
         return int(page.find_all('li', class_='page')[-1].text.strip())
     
@@ -206,7 +207,7 @@ class ZakupkiParser(Parser):
 
     @classmethod
     def parse(cls, org_maker) -> [Organization]:
-        page_count = cls.__get_count_pages()
+        page_count = cls._get_count_pages()
 
         pages = cls.get_pages(page_count)
         pages = asyncio.run(pages)
@@ -218,4 +219,22 @@ class ZakupkiParser(Parser):
         
 
 if __name__ == "__main__":
-    pprint(dir(ConverterOrganizatonToCVS))
+
+    org_maker = OrganizatonMaker()
+    parser = ZakupkiParser()
+
+    # saver = CSVSaver()
+    # conv = ConverterOrganizatonToCVS()
+    page = parser.get_page_by_page_num()
+    print(org_maker._get_name(parser.get_records_from_page(page)[3]))
+    # with open('test_page.html', 'w') as file:
+    #     file.write(page)
+    # orgs = parser.parse(org_maker)
+    # data = conv.convert(orgs)
+    # org = orgs[:2]
+    # print(conv.convert(org))
+    # saver.save(data, 'test.csv')
+
+
+
+

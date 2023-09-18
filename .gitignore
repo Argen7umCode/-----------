@@ -1,2 +1,6 @@
 env/
 *.json
+.sourcery.yaml
+*.csv
+.pre-commit-config.yaml
+__pycache__
