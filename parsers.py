@@ -11,10 +11,13 @@ import csv
 
 from requests import get, post
 from bs4 import BeautifulSoup
+from colorama import init, Fore, Back, Style
 
 import asyncio
 import aiohttp
 
+
+init()
 headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36'
     }
@@ -46,6 +49,15 @@ class Organization:
     url          : str
     date_include : datetime
     date_updated : datetime
+
+@dataclass
+class Organization:
+
+    id           : str
+    full_description         : str
+    short_description          : str
+    city : str
+    address : str
     
 class Maker(ABC):
     
@@ -165,7 +177,7 @@ class ZakupkiParser(Parser):
     @classmethod
     def get_page_by_page_num(cls, num=1) -> str:
         url = cls.get_url_by_page_num(num)
-        return get(url, headers=headers).text
+        return get(url).text
 
     @classmethod
     async def async_get_page_by_page_num(cls, num=1) -> asyncio.coroutine:
@@ -173,7 +185,7 @@ class ZakupkiParser(Parser):
         async with aiohttp.ClientSession() as session:
             async with session.get(url, headers=headers) as response:
                 page = await response.text()
-                print("Parsed: ", num)
+                print(f"Parsed: {num}")
 
         return page
 
@@ -216,25 +228,70 @@ class ZakupkiParser(Parser):
         return reduce(
             lambda a, b: a + b, [cls.pasre_page(page, org_maker) for page in pages]
         )
+
+class NORPRIZParser(Parser):
+    url = 'https://reestr.nopriz.ru/api/sro/list'
+
+    @staticmethod
+    def get_body(num=1):
+        return {
+            "page": num,
+            "pageCount": 100
+        }
         
 
-if __name__ == "__main__":
+    @classmethod
+    def get_page_by_page_num(cls, num=1) -> Any:
+        return post(cls.url, 
+                    headers=headers, 
+                    json=cls.get_body(num)).json()
+        
+    @classmethod
+    def _get_count_pages(cls) -> int:
+        return int(cls.get_page_by_page_num().get('data').get('countPages', 1))
 
-    org_maker = OrganizatonMaker()
-    parser = ZakupkiParser()
+    @classmethod
+    async def async_get_page_by_page_num(cls, num):
+        async with aiohttp.ClientSession() as session:
+            data=cls.get_body(num)
+            async with session.post(cls.url, 
+                                    json=data, 
+                                    headers=headers) as responce:
+                data = await responce.json()
+                print(Fore.GREEN, f" - parsed: {num}")
+        return data
 
-    # saver = CSVSaver()
-    # conv = ConverterOrganizatonToCVS()
-    page = parser.get_page_by_page_num()
-    print(org_maker._get_name(parser.get_records_from_page(page)[3]))
-    # with open('test_page.html', 'w') as file:
-    #     file.write(page)
-    # orgs = parser.parse(org_maker)
-    # data = conv.convert(orgs)
-    # org = orgs[:2]
-    # print(conv.convert(org))
-    # saver.save(data, 'test.csv')
+    @classmethod
+    async def get_data(cls):
+        page_num = cls._get_count_pages()
+        print(Fore.YELLOW, f'Pages: {page_num}')
+        data = asyncio.gather(*(cls.async_get_page_by_page_num(num) 
+                         for num in range(1, page_num+1)))
+        return await data
+    
+    @staticmethod
+    def _extract_one(data: dict) -> [dict]:
+        return data.get('data').get('data')
+    
+    @classmethod
+    def _extract_many(cls, data: [Any]) -> [dict]:
+        return reduce(
+            lambda a, b: a + b, 
+            [cls._extract_one(page) for page in data]
+        )
+    
+    @classmethod
+    def extract_data(cls, data):
+        return cls._extract_one(data) if isinstance(data, dict)\
+            else cls._extract_many(data)
+
+    @classmethod
+    def parse(cls):
+        data = asyncio.run(cls.get_data())
+        data = cls.extract_data(data)
+        # pprint(data)
 
 
-
-
+if __name__ == '__main__':
+    parser = NORPRIZParser()
+    parser.parse()
