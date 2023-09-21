@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from string import Template
-from dataclasses import dataclass, asdict, astuple
+from dataclasses import dataclass, asdict, astuple, field
 from datetime import datetime
 from pprint import pprint
 from functools import reduce
@@ -55,7 +55,7 @@ class Organization:
 
 @dataclass
 class SROMember:
-    id                         : str
+    id                         : int
     full_description           : str
     short_description          : str
     director                   : str
@@ -63,7 +63,7 @@ class SROMember:
     inventory_number           : str
     member_status              : str
     member_type                : str
-    ogrinp                     : str
+    ogrnip                     : str
     registration_number        : str
     registry_registration_date : datetime
     short_description          : str
@@ -71,7 +71,7 @@ class SROMember:
     sro_full_description       : str
     sro_id                     : int
     sro_registration_number    : str
-    
+    meta                       : field(default_factory=dict)
 
 class Maker(ABC):
     
@@ -85,79 +85,10 @@ def make_random_sleep(from_, to):
 
 class SROMemberMaker(Maker):
 
-    @staticmethod
-    def _get_id(data):
-        return data.get('id')
-
-    @staticmethod
-    def _get_director(data):
-        return data.get('director')
-
-    @staticmethod
-    def _get_full_description(data):
-        return data.get('full_description')
-    
-    @staticmethod
-    def _get_inn(data):
-        return data.get('inn')
-
-    @staticmethod
-    def _get_inventory_number(data):
-        return data.get('inventory_number')
-
-    @staticmethod
-    def _get_member_status(data):
-        return data.get('member_status')
-
-    @staticmethod
-    def _get_member_type(data):
-        return data.get('member_type')
-    
-    @staticmethod
-    def _get_ogrnip(data):
-        return data.get('ogrnip')
-    
-    @staticmethod
-    def _get_registration_number(data):
-        return data.get('registration_number')
-    
-    @staticmethod
-    def _get_registry_registration_date(data):
-        return data.get('registry_registration_date')
-    
-    @staticmethod
-    def _get_short_description(data):
-        return data.get('short_description')
-
-    @staticmethod
-    def _get_sro_deactivate_message(data):
-        return data.get('sro', {}).get('deactivate_message')
-    
-    @staticmethod
-    def _get_sro_full_description(data):
-        return data.get('sro', {}).get('full_description')
-    
-    @staticmethod
-    def _get_sro_id(data):
-        return data.get('sro', {}).get('id')
-    
-    @staticmethod
-    def _get_sro_registration_number(data):
-        return data.get('sro', {}).get('registration_number')
-
     @classmethod
     def make(cls, data):
-        return SROMember(
-            id=cls._get_id(),
-            full_description=cls._get_full_description(),
-            short_description=cls._get_short_description(),
-            director=cls._get_director(),
-            inn=cls._get_inn(),
-            inventory_number=cls._get_inventory_number(),
-            
-
-
-        )
+        data = data | data.get('sro')
+        return SROMember(**{key:value for key, value in data if key in SROMember.fields})
 
 class OrganizatonMaker(Maker):
     
@@ -349,7 +280,7 @@ class NORPRIZParser(Parser):
     def _get_count_pages(cls) -> int:
         return int(cls.get_page_by_page_num().get('data').get('countPages', 1))
 
-    @classmethod        pprint(cls.extract_data(data))
+    @classmethod
     async def get_one_page(cls, session, request_body):
         page_num = request_body["page"]
         print(f'Created task: {page_num}')
@@ -396,9 +327,25 @@ class NORPRIZParser(Parser):
 
 
 if __name__ == '__main__':
-    parser = NORPRIZParser()
-    parser.parse()
-
-
+    data = {
+        'director': 'Генеральный директор Лопарев Александр Иванович',
+        'full_description': 'Общество с ограниченной ответственностью «Капиталстрой»',
+        'id': 732754,
+        'inn': '4825018430',
+        'inventory_number': 'И-029-004825018430-0576',
+        'member_status': {'code': '2', 'id': 2, 'title': 'Исключен'},
+        'member_type': {'code': '1', 'id': 1, 'title': 'ЮЛ'},
+        'ogrnip': '1024840853542',
+        'registration_number': '576',
+        'registry_registration_date': '2012-06-13T00:00:00+04:00',
+        'short_description': 'ООО Капиталстрой',
+        'sro': {
+            'deactivate_message': '(Ростехнадзора от 29.12.2017 № СП-156)',
+            'full_description': 'Союз инженеров-изыскателей «Стандарт-Изыскания»',
+            'id': 347,
+            'registration_number': 'СРО-И-029-25102011'
+        }}
+    # print(SROMemberMaker().make(data))
+    pprint(dir(dataclass))
 
 
