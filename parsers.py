@@ -6,8 +6,10 @@ from pprint import pprint
 from functools import reduce
 from json import dump
 from typing import Any, Union
+from time import sleep
+from random import randint
 import csv
-
+import timeit
 
 from requests import get, post
 from bs4 import BeautifulSoup
@@ -19,7 +21,8 @@ import aiohttp
 
 init()
 headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36'
+        'User-Agent'    : 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 YaBrowser/23.5.1.800 Yowser/2.5 Safari/537.36',
+        'Content-Type' : 'application/json',
     }
 class Saver:
     @staticmethod
@@ -64,6 +67,9 @@ class Maker(ABC):
     @abstractmethod
     def make(data):
         pass
+
+def make_random_sleep(from_, to):
+    sleep(randint(from_, to)/10)
 
 class OrganizatonMaker:
     
@@ -230,49 +236,52 @@ class ZakupkiParser(Parser):
         )
 
 class NORPRIZParser(Parser):
-    url = 'https://reestr.nopriz.ru/api/sro/list'
+    url = 'https://reestr.nopriz.ru/api/sro/all/member/list'
 
     @staticmethod
     def get_body(num=1):
         return {
             "page": num,
-            "pageCount": 100
+            "pageCount": 5000
         }
         
 
     @classmethod
     def get_page_by_page_num(cls, num=1) -> Any:
-        return post(cls.url, 
+        r = post(cls.url, 
                     headers=headers, 
-                    json=cls.get_body(num)).json()
-        
+                    json=cls.get_body(num))
+        try:    
+            return r.json()
+        except Exception as e:
+            print(f'Status code: {r.status_code}, {e}')
+
     @classmethod
     def _get_count_pages(cls) -> int:
         return int(cls.get_page_by_page_num().get('data').get('countPages', 1))
 
     @classmethod
-    async def async_get_page_by_page_num(cls, num):
-        async with aiohttp.ClientSession() as session:
-            data=cls.get_body(num)
-            async with session.post(cls.url, 
-                                    json=data, 
-                                    headers=headers) as responce:
-                data = await responce.json()
-                print(Fore.GREEN, f" - parsed: {num}")
-        return data
+    async def get_one_page(cls, session, request_body):
+        page_num = request_body["page"]
+        print(f'Created task: {page_num}')
+        async with session.post(cls.url, data=request_body) as response:
+            page = await response.json()
+            print(f' - parced: {page_num}')
+            return page
 
     @classmethod
-    async def get_data(cls):
-        page_num = cls._get_count_pages()
-        print(Fore.YELLOW, f'Pages: {page_num}')
-        data = asyncio.gather(*(cls.async_get_page_by_page_num(num) 
-                         for num in range(1, page_num+1)))
-        return await data
-    
+    async def get_many_pages(cls, request_bodies):
+        session = aiohttp.ClientSession(headers=headers)
+        tasks = [cls.get_one_page(session, request_body)
+                        for request_body in request_bodies]
+        data = await asyncio.gather(*tasks)
+        await session.close()
+        return data
+
     @staticmethod
     def _extract_one(data: dict) -> [dict]:
         return data.get('data').get('data')
-    
+  
     @classmethod
     def _extract_many(cls, data: [Any]) -> [dict]:
         return reduce(
@@ -285,13 +294,24 @@ class NORPRIZParser(Parser):
         return cls._extract_one(data) if isinstance(data, dict)\
             else cls._extract_many(data)
 
+    
+    
+
     @classmethod
     def parse(cls):
-        data = asyncio.run(cls.get_data())
-        data = cls.extract_data(data)
-        # pprint(data)
+        page_num = cls._get_count_pages()
+        print(f'Total pages: {page_num}')
+        request_bodies = map(cls.get_body, range(1, page_num+1))
+        future = cls.get_many_pages(request_bodies)
+        data = asyncio.run(future)
+        pprint(cls.extract_data(data))
+        return data
 
 
 if __name__ == '__main__':
     parser = NORPRIZParser()
     parser.parse()
+
+
+
+
