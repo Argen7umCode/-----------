@@ -54,14 +54,25 @@ class Organization:
     date_updated : datetime
 
 @dataclass
-class Organization:
-
-    id           : str
-    full_description         : str
+class SROMember:
+    id                         : str
+    full_description           : str
     short_description          : str
-    city : str
-    address : str
+    director                   : str
+    inn                        : str
+    inventory_number           : str
+    member_status              : str
+    member_type                : str
+    ogrinp                     : str
+    registration_number        : str
+    registry_registration_date : datetime
+    short_description          : str
+    deactivate_message         : str
+    sro_full_description       : str
+    sro_id                     : int
+    sro_registration_number    : str
     
+
 class Maker(ABC):
     
     @abstractmethod
@@ -71,7 +82,84 @@ class Maker(ABC):
 def make_random_sleep(from_, to):
     sleep(randint(from_, to)/10)
 
-class OrganizatonMaker:
+
+class SROMemberMaker(Maker):
+
+    @staticmethod
+    def _get_id(data):
+        return data.get('id')
+
+    @staticmethod
+    def _get_director(data):
+        return data.get('director')
+
+    @staticmethod
+    def _get_full_description(data):
+        return data.get('full_description')
+    
+    @staticmethod
+    def _get_inn(data):
+        return data.get('inn')
+
+    @staticmethod
+    def _get_inventory_number(data):
+        return data.get('inventory_number')
+
+    @staticmethod
+    def _get_member_status(data):
+        return data.get('member_status')
+
+    @staticmethod
+    def _get_member_type(data):
+        return data.get('member_type')
+    
+    @staticmethod
+    def _get_ogrnip(data):
+        return data.get('ogrnip')
+    
+    @staticmethod
+    def _get_registration_number(data):
+        return data.get('registration_number')
+    
+    @staticmethod
+    def _get_registry_registration_date(data):
+        return data.get('registry_registration_date')
+    
+    @staticmethod
+    def _get_short_description(data):
+        return data.get('short_description')
+
+    @staticmethod
+    def _get_sro_deactivate_message(data):
+        return data.get('sro', {}).get('deactivate_message')
+    
+    @staticmethod
+    def _get_sro_full_description(data):
+        return data.get('sro', {}).get('full_description')
+    
+    @staticmethod
+    def _get_sro_id(data):
+        return data.get('sro', {}).get('id')
+    
+    @staticmethod
+    def _get_sro_registration_number(data):
+        return data.get('sro', {}).get('registration_number')
+
+    @classmethod
+    def make(cls, data):
+        return SROMember(
+            id=cls._get_id(),
+            full_description=cls._get_full_description(),
+            short_description=cls._get_short_description(),
+            director=cls._get_director(),
+            inn=cls._get_inn(),
+            inventory_number=cls._get_inventory_number(),
+            
+
+
+        )
+
+class OrganizatonMaker(Maker):
     
     @staticmethod
     def _get_id_and_url(record) -> tuple:
@@ -124,6 +212,7 @@ class OrganizatonMaker:
         date_update = cls._get_update_date(record)
         return Organization(id, name, inn, url, date_include, date_update)
             
+
 
 class Converter(ABC):
 
@@ -260,7 +349,7 @@ class NORPRIZParser(Parser):
     def _get_count_pages(cls) -> int:
         return int(cls.get_page_by_page_num().get('data').get('countPages', 1))
 
-    @classmethod
+    @classmethod        pprint(cls.extract_data(data))
     async def get_one_page(cls, session, request_body):
         page_num = request_body["page"]
         print(f'Created task: {page_num}')
@@ -294,18 +383,16 @@ class NORPRIZParser(Parser):
         return cls._extract_one(data) if isinstance(data, dict)\
             else cls._extract_many(data)
 
-    
-    
+
 
     @classmethod
-    def parse(cls):
+    def parse(cls, maker):
         page_num = cls._get_count_pages()
         print(f'Total pages: {page_num}')
         request_bodies = map(cls.get_body, range(1, page_num+1))
         future = cls.get_many_pages(request_bodies)
         data = asyncio.run(future)
-        pprint(cls.extract_data(data))
-        return data
+        return [maker.make(item) for item in data]
 
 
 if __name__ == '__main__':
