@@ -154,8 +154,7 @@ class Converter(ABC):
     @abstractmethod
     def _convert_many(data: Any):
         pass
-
-    @abstractmethod
+    
     def convert(cls, data: Any, *args, **kwargs):
         return cls._convert_many(data) if isinstance(data, list)\
             else cls._convert_one(data)
@@ -171,7 +170,7 @@ class ConverterDataclassToJSON(Converter):
         return [cls._convert_one(obj) for obj in data_objects]
 
 
-class ConverterDataclassToCVS(Converter):
+class ConverterDataclassToCSV(Converter):
     
     @staticmethod
     def _convert_one(data_object: Any, sep : str = ',') -> str:
@@ -331,7 +330,8 @@ if __name__ == '__main__':
     parser = NORPRIZParser()
     maker = SROMemberMaker()
     data = parser.parse(maker)
-    pprint(data)
-
+    pprint(ConverterDataclassToJSON().convert(data=data))
+    print()
+    pprint(ConverterDataclassToCSV().convert(data=data))
 
 
