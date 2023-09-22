@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from string import Template
-from dataclasses import dataclass, asdict, astuple, field
+from dataclasses import dataclass, asdict, astuple, fields
 from datetime import datetime
 from pprint import pprint
 from functools import reduce
@@ -55,23 +55,22 @@ class Organization:
 
 @dataclass
 class SROMember:
-    id                         : int
-    full_description           : str
-    short_description          : str
-    director                   : str
-    inn                        : str
-    inventory_number           : str
-    member_status              : str
-    member_type                : str
-    ogrnip                     : str
-    registration_number        : str
-    registry_registration_date : datetime
-    short_description          : str
-    deactivate_message         : str
-    sro_full_description       : str
-    sro_id                     : int
-    sro_registration_number    : str
-    meta                       : field(default_factory=dict)
+    id                         : int = None 
+    full_description           : str = None 
+    short_description          : str = None 
+    director                   : str = None 
+    inn                        : str = None 
+    inventory_number           : str = None 
+    member_status              : str = None 
+    member_type                : str = None 
+    ogrnip                     : str = None 
+    registration_number        : str = None 
+    registry_registration_date : datetime = None 
+    short_description          : str = None 
+    deactivate_message         : str = None 
+    sro_full_description       : str = None 
+    sro_id                     : int = None 
+    sro_registration_number    : str = None 
 
 class Maker(ABC):
     
@@ -82,13 +81,14 @@ class Maker(ABC):
 def make_random_sleep(from_, to):
     sleep(randint(from_, to)/10)
 
-
 class SROMemberMaker(Maker):
 
     @classmethod
     def make(cls, data):
-        data = data | data.get('sro')
-        return SROMember(**{key:value for key, value in data if key in SROMember.fields})
+        data = data | {f'sro_{key}' : value 
+                       for key, value in data.get('sro', {}).items()}
+        data_fields = [field.name for field in fields(SROMember)] 
+        return SROMember(**dict(filter(lambda a: a[0] in data_fields, data.items())))
 
 class OrganizatonMaker(Maker):
     
@@ -157,34 +157,34 @@ class Converter(ABC):
 
     @abstractmethod
     def convert(cls, data: Any, *args, **kwargs):
-        return cls._convert_one(data) if isinstance(data, Organization)\
-            else cls._convert_many(data)
+        return cls._convert_many(data) if isinstance(data, list)\
+            else cls._convert_one(data)
 
-class ConverterOrganizationToJSON(Converter):
+class ConverterDataclassToJSON(Converter):
     
     @staticmethod
-    def _convert_one(organization: Organization) -> dict:
-        return asdict(organization)
+    def _convert_one(data_object: Any) -> dict:
+        return asdict(data_object)
     
     @classmethod
-    def _convert_many(cls, organizations: [Organization]) -> [dict]:
-        return [cls._convert_one(org) for org in organizations]
+    def _convert_many(cls, data_objects: [Any]) -> [dict]:
+        return [cls._convert_one(obj) for obj in data_objects]
 
 
-class ConverterOrganizatonToCVS(Converter):
+class ConverterDataclassToCVS(Converter):
     
     @staticmethod
-    def _convert_one(organization: Organization, sep : str = ',') -> str:
-        return sep.join(astuple(organization))     
+    def _convert_one(data_object: Any, sep : str = ',') -> str:
+        return sep.join(astuple(data_object))     
 
     @classmethod
-    def _convert_many(cls, organizations: [Organization], sep : str = ',') -> str:
-        return '\n'.join(cls._convert_one(organization, sep) 
-                          for organization in organizations)
+    def _convert_many(cls, data_objects: [Any], sep : str = ',') -> str:
+        return '\n'.join(cls._convert_one(data_object, sep) 
+                          for data_object in data_objects)
     @classmethod
     def convert(cls, data: Any, sep : str = ',', *args, **kwargs):
-        return cls._convert_one(data, sep) if isinstance(data, Organization)\
-            else cls._convert_many(data, sep)
+        return cls._convert_many(data, sep) if isinstance(data, list)\
+            else cls._convert_one(data, sep)
 
 class Parser(ABC):
 
@@ -320,32 +320,18 @@ class NORPRIZParser(Parser):
     def parse(cls, maker):
         page_num = cls._get_count_pages()
         print(f'Total pages: {page_num}')
+        page_num = 20
         request_bodies = map(cls.get_body, range(1, page_num+1))
         future = cls.get_many_pages(request_bodies)
         data = asyncio.run(future)
-        return [maker.make(item) for item in data]
+        return [maker.make(item) for item in cls.extract_data(data)]
 
 
 if __name__ == '__main__':
-    data = {
-        'director': 'Генеральный директор Лопарев Александр Иванович',
-        'full_description': 'Общество с ограниченной ответственностью «Капиталстрой»',
-        'id': 732754,
-        'inn': '4825018430',
-        'inventory_number': 'И-029-004825018430-0576',
-        'member_status': {'code': '2', 'id': 2, 'title': 'Исключен'},
-        'member_type': {'code': '1', 'id': 1, 'title': 'ЮЛ'},
-        'ogrnip': '1024840853542',
-        'registration_number': '576',
-        'registry_registration_date': '2012-06-13T00:00:00+04:00',
-        'short_description': 'ООО Капиталстрой',
-        'sro': {
-            'deactivate_message': '(Ростехнадзора от 29.12.2017 № СП-156)',
-            'full_description': 'Союз инженеров-изыскателей «Стандарт-Изыскания»',
-            'id': 347,
-            'registration_number': 'СРО-И-029-25102011'
-        }}
-    # print(SROMemberMaker().make(data))
-    pprint(dir(dataclass))
+    parser = NORPRIZParser()
+    maker = SROMemberMaker()
+    data = parser.parse(maker)
+    pprint(data)
+
 
 
