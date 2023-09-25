@@ -7,14 +7,25 @@ from bs4 import BeautifulSoup
 class Extracter(ABC):
 
     @abstractmethod
-    def extract(self, responce: ClientResponse):
+    def extract(self, responce: dict):
         pass
 
 class ZakupkiExtracter(Extracter):
     
     @staticmethod
-    def get_soup_from_page(page):
+    def get_soup_from_html_page(page):
         return BeautifulSoup(page, 'lxml')
+
+    def get_count_of_pages(self, page):
+        page = self.get_soup_from_html_page(page)
+        return int(page.find_all('li', class_='page')[-1].text.strip())
+    
+
+    def get_records_from_page(self, page) -> [str]:
+
+        return self.get_soup_from_html_page(page).find('div', class_='search-registry-entrys-block')\
+                                             .find_all('div', class_='search-registry-entry-block')
+    
 
     @staticmethod
     def _get_id_and_url(record) -> tuple:
@@ -63,11 +74,16 @@ class ZakupkiExtracter(Extracter):
     def get_page_from_responce(response):
         return response.text()
 
-    def extract(responce: ClientResponse):
-
+    def extract(self, responce: dict):
+        page = responce.get('html', '')
+        records = self.get_records_from_page(page)
         
-        name = cls._get_name(record)
-        id, url = cls._get_id_and_url(record)
-        inn = cls._get_inn(record)
-        date_include = cls._get_include_date(record)
-        date_update = cls._get_update_date(record)
+        for record in records:
+            id, url = self._get_id_and_url(record)
+            yield {
+                'name' : self._get_name(record),
+                'id'   : id,
+                'url'  : url,
+                'date_include' : self._get_include_date(record),
+                'date_update' : self._get_update_date(record)
+            }

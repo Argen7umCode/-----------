@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
 from colorama import init, Fore, Back, Style
 from pprint import pprint
-
+from string import Template
 
 from requesters import AsyncGetRequester, AsyncPostRequester
+from extracters import ZakupkiExtracter
 from data_models import Organization, SROMember
 from bs4 import BeautifulSoup
 
@@ -24,10 +25,10 @@ class Parser(ABC):
         pass
 
 class AsyncParser(Parser):
-    def __init__(self, requester, extracter, maker, urls, bodies) -> None:
+    def __init__(self, requester, extracter, maker) -> None:
         super().__init__()
-        self.__urls = urls
-        self.__bodies = bodies
+        self.__urls = None
+        self.__bodies = None
         self.requester = requester
         self.extracter = extracter
         self.maker = maker 
@@ -51,10 +52,24 @@ class AsyncParser(Parser):
     async def _make_one_page_task(self, url, body, session):
         return await self.requester.make_request(url, body, session)
 
+    @staticmethod
+    def zip_urls_bodies(urls, bodies):
+        url_len = url_len
+        bodies_len = bodies_len
+        if all([url_len == 0, bodies_len != 0]):
+            return zip(urls*bodies_len, bodies)
+        elif all([url_len != 0, bodies_len == 0]):
+            return zip(urls, bodies*url_len) 
+        else:
+            return zip(urls, bodies) 
+        
     async def _get_many_page_tasks(self, urls, bodies):
-        session = aiohttp.ClientSession(headers=headers) 
+        session = aiohttp.ClientSession(headers=headers)
+
+
         tasks = [self._make_one_page_task(url, body, session)
-                                for url, body in zip(urls, bodies)]
+                                for url, body in self.zip_urls_bodies(urls=urls,
+                                                                      bodies=bodies)]
         data = await asyncio.gather(*tasks)
         await session.close()
         return data
@@ -63,17 +78,50 @@ class AsyncParser(Parser):
     def parse(self):
         task = self._get_many_page_tasks(self.urls, 
                                          self.bodies)
-        # data = self.extracter()
-        data = asyncio.run(task)
+        data = list(map(self.extracter.extract, asyncio.run(task)))
         # return self.maker.make(data)
+        return list(map(list, data))
 
-        return data
 
+class ZakupkiParser(AsyncParser):
+
+    def __init__(self, requester, extracter, maker) -> None:
+        super().__init__(requester, extracter, maker)
+        recs_per_page = 500
+        self.url_template = Template(f'https://zakupki.gov.ru/epz/dishonestsupplier/search/results.html?searchString=&morphology=on&search-filter=Дате+обновления&savedSearchSettingsIdHidden=&sortBy=UPDATE_DATE&pageNumber=$page&sortDirection=false&recordsPerPage=_{recs_per_page}&showLotsInfoHidden=false&fz223=on&ppRf615=on&dsStatuses=&inclusionDateFrom=&inclusionDateTo=&lastUpdateDateFrom=&lastUpdateDateTo=')
+   
+
+    @property
+    def urls(self):
+        if self.__urls is None:
+            count = self.get_count_of_pages(self.url_template.substitute(page=1))
+            self.__url = [self.url_template.substitute(page=page_num) 
+                                        for page_num in range(1, count+1)]
+        return self.__urls
+
+
+    def get_count_of_pages(self, url):
+        page = asyncio.run(self._get_many_page_tasks([url], [{}]))[0].get('html', '')
+        return self.extracter.get_count_of_pages(page)
+
+    def parse(self):
+
+        task = self._get_many_page_tasks(self.urls, 
+                                         self.bodies)
+        data = list(map(self.extracter.extract, asyncio.run(task)))
+        # return self.maker.make(data)
+        return list(map(list, data))
 
 
 if __name__ == '__main__':
+
+
     requester = AsyncGetRequester()
-    parser = AsyncParser(requester, None, None, ['https://stackoverflow.com/questions/64007067/async-processing-of-function-requests-using-asyncio'] * 3, [{}]*3)
-    pprint(parser.parse())
+    extracter = ZakupkiExtracter()
+    parser = ZakupkiParser(requester, 
+                         extracter, 
+                         None)
+
+    pprint()
     
 

@@ -20,7 +20,7 @@ class AsyncRequester(ABC):
         }
 
     @abstractmethod
-    async def make_request(self, url, body):
+    async def make_request(self, url, body, session):
         pass
 
 class AsyncPostRequester(AsyncRequester):
