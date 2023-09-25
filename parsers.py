@@ -56,9 +56,9 @@ class AsyncParser(Parser):
     def zip_urls_bodies(urls, bodies):
         url_len = url_len
         bodies_len = bodies_len
-        if all([url_len == 0, bodies_len != 0]):
+        if all([url_len == 1, bodies_len != 0]):
             return zip(urls*bodies_len, bodies)
-        elif all([url_len != 0, bodies_len == 0]):
+        elif all([url_len != 0, bodies_len == 1]):
             return zip(urls, bodies*url_len) 
         else:
             return zip(urls, bodies) 
