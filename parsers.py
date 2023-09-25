@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 from colorama import init, Fore, Back, Style
+from pprint import pprint
+
 
 from requesters import AsyncGetRequester, AsyncPostRequester
 from data_models import Organization, SROMember
@@ -24,70 +26,54 @@ class Parser(ABC):
 class AsyncParser(Parser):
     def __init__(self, requester, extracter, maker, urls, bodies) -> None:
         super().__init__()
-        self._urls = urls
-        self._bodies = bodies
+        self.__urls = urls
+        self.__bodies = bodies
         self.requester = requester
         self.extracter = extracter
         self.maker = maker 
 
     @property
     def urls(self):
-        return self._urls
+        return self.__urls
 
-    @property.setter
+    @urls.setter
     def urls(self, urls):
-        self._urls = urls
+        self.__urls = urls
     
     @property
     def bodies(self):
-        return self._bodies
+        return self.__bodies
 
-    @property.setter
+    @bodies.setter
     def bodies(self, bodies):
-        self._bodies = bodies
+        self.__bodies = bodies
 
-    def _make_session(self, headers):
-        self.session = aiohttp.ClientSession(headers=headers) 
-
-    async def _close_session(self):
-        await self.session.close()
-
-    async def _make_one_page_task(self, url, body):
-        return await self.requester.make_request(url, body)
+    async def _make_one_page_task(self, url, body, session):
+        return await self.requester.make_request(url, body, session)
 
     async def _get_many_page_tasks(self, urls, bodies):
-        return asyncio.gather(*[self._make_one_page_task(url, body) 
-                                for url, body in zip(urls, bodies)])
-    
-    async def parse(self):
-        self._make_session()
+        session = aiohttp.ClientSession(headers=headers) 
+        tasks = [self._make_one_page_task(url, body, session)
+                                for url, body in zip(urls, bodies)]
+        data = await asyncio.gather(*tasks)
+        await session.close()
+        return data
+
+
+    def parse(self):
         task = self._get_many_page_tasks(self.urls, 
                                          self.bodies)
-        data = self.extracter(asyncio.run(task))
-        self._close_session()
-        return self.maker.make(data)
+        # data = self.extracter()
+        data = asyncio.run(task)
+        # return self.maker.make(data)
+
+        return data
 
 
-class ZakupkiParser(AsyncParser):
+
+if __name__ == '__main__':
+    requester = AsyncGetRequester()
+    parser = AsyncParser(requester, None, None, ['https://stackoverflow.com/questions/64007067/async-processing-of-function-requests-using-asyncio'] * 3, [{}]*3)
+    pprint(parser.parse())
     
-    def __init__(self, requester, extracter, maker, url, bodies) -> None:
-        super().__init__(requester, extracter, maker, url, bodies)
-        self._recs_per_pages = 500
-    
-    @property
-    def recs_per_pages(self):
-        return self._recs_per_pages
-    
-    @property.setter
-    def recs_per_pages(self, value):
-        if value <= 0:
-            raise ValueError('The number of entries on the page must be greater than zero')
-        self._recs_per_pages = value
-    def parse(self):
-        
-
-    
-
-
-
 

@@ -5,7 +5,6 @@ from csv import csv
 
 class Saver(ABC):
 
-
     @abstractmethod
     def save(data, path):
         pass
