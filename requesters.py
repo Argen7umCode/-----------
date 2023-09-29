@@ -4,11 +4,10 @@ import asyncio
 
 
 class AsyncRequester(ABC):
-
     @staticmethod
     async def decode_responce(response):
         try:
-            json_data = await response.json(content_type='text/html')
+            json_data = await response.json(content_type=None)
         except json.JSONDecodeError as e:
             json_data = None
         html_data = await response.text() 

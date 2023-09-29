@@ -4,7 +4,7 @@ from pprint import pprint
 from string import Template
 
 from requesters import AsyncGetRequester, AsyncPostRequester
-from extracters import ZakupkiExtracter
+from extracters import ZakupkiExtracter, ReestrNORPRIZExtracter
 from data_models import Organization, SROMember
 from bs4 import BeautifulSoup
 
@@ -50,8 +50,11 @@ class AsyncParser(Parser):
         self.__bodies = bodies
 
     async def _make_one_page_task(self, url, body, session):
-        return await self.requester.make_request(url, body, session)
-
+        print(f'Create task: {url} {body}')
+        data = await self.requester.make_request(url, body, session)
+        print(f'Parsed: {url} {body}')
+        return data
+    
     @staticmethod
     def zip_urls_bodies(urls, bodies):
         url_len = len(urls)
@@ -65,8 +68,6 @@ class AsyncParser(Parser):
         
     async def _get_many_page_tasks(self, urls, bodies):
         async with aiohttp.ClientSession(headers=headers) as session:
-
-
             tasks = [self._make_one_page_task(url, body, session)
                                     for url, body in self.zip_urls_bodies(urls=urls,
                                                                         bodies=bodies)]
@@ -96,7 +97,7 @@ class ZakupkiParser(AsyncParser):
     @property
     def urls(self):
         if self.__urls is None:
-            count = self.get_count_of_pages(self.url_template.substitute(page=1))
+            count = int(self.get_count_of_pages(self.url_template.substitute(page=1)))
             self.urls = [self.url_template.substitute(page=page_num) 
                                         for page_num in range(1, count+1)]
         return self.__urls
@@ -116,24 +117,81 @@ class ZakupkiParser(AsyncParser):
         self.__bodies = bodies
 
     def get_count_of_pages(self, url):
-        page = asyncio.run(self._get_many_page_tasks([url], [{}]))[0].get('html', '')
-        return self.extracter.get_count_of_pages(page)
+        response = asyncio.run(self._get_many_page_tasks([url], [{}]))[0]
+        return self.extracter.get_count_of_pages(response)
 
-    def parse(self):
-        task = self._get_many_page_tasks(self.urls, 
-                                         self.bodies)
-        data = list(map(self.extracter.extract, asyncio.run(task)))
-        return list(map(list, data))
+
+class ReestrNORPRIZParser(AsyncParser):
+
+    def __init__(self, requester, extracter, maker) -> None:
+        super().__init__(requester, extracter, maker)
+        self.url = 'https://reestr.nopriz.ru/api/sro/all/member/list'
+        self.__bodies = None
+        self.__urls = [self.url]
+
+    @staticmethod
+    def get_body(num=1):
+        return {
+            "page": num,
+            "pageCount": 10
+        }
+
+    @property
+    def bodies(self):
+        if self.__bodies is None:
+            self.bodies = [{}]
+        return self.__bodies
+    
+    @bodies.setter
+    def bodies(self, bodies):
+        self.__bodies = bodies
+
+    @property
+    def urls(self):
+        if self.__urls is None:
+            self.urls = [{}]
+        return self.__urls
+    
+    @urls.setter
+    def urls(self, urls):
+        self.__urls = urls
+
+    def get_count_of_pages(self):
+        response = asyncio.run(self._get_many_page_tasks([self.url], 
+                                                         [self.get_body()]))[0]
+        pprint(len(response['json']['data']['data']))
+        return self.extracter.get_count_of_pages(response)
+
+    @property
+    def bodies(self):
+        if self.__bodies is None:
+            self.count_of_pages = int(self.get_count_of_pages())
+            print(f'Pages: {self.count_of_pages}')
+            self.bodies = [self.get_body(num) 
+                           for num in range(1, 10)]
+        return self.__bodies
+    
+    @bodies.setter
+    def bodies(self, bodies):
+        self.__bodies = bodies
+
+
+
+    # def parse(self):
+    #     task = self._get_many_page_tasks()
+
+
+    
 
 
 if __name__ == '__main__':
 
 
-    requester = AsyncGetRequester()
-    extracter = ZakupkiExtracter()
-    parser = ZakupkiParser(requester, 
+    requester = AsyncPostRequester()
+    extracter = ReestrNORPRIZExtracter()
+    parser = ReestrNORPRIZParser(requester, 
                          extracter, 
                          None)
-    pprint(parser.parse())
+    data = parser.parse()
     
 
